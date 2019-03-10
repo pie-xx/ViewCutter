@@ -1,0 +1,71 @@
+#:kivy 1.0
+#:import kivy kivy
+#:import win kivy.core.window
+AreaViewWidget:
+
+<AreaViewWidget>:
+    viewer_box:viewer_box
+    annotation_box:annotation_box
+    button_box:button_box
+    
+    BoxLayout:
+        orientation: 'vertical'
+        size: 1200,800
+
+        Image:
+            size_hint_y: 50
+            id:viewer_box
+            on_touch_down:root.onImageTouch(args)
+            on_touch_move:root.onImageMove(args)
+
+        TextInput:
+            size_hint_y: 1
+            id: annotation_box
+            
+        BoxLayout:
+            size_hint_y: 2
+            id:button_box
+            Button:
+                size_hint_x: 1
+                id: button0
+                text: "CAPTURE"
+                font_size: 12
+                on_press: root.captureClicked()
+            Button:
+                size_hint_x: 1
+                id: button1
+                text: "clear"
+                font_size: 12
+                on_press: root.clearbtnClicked()
+            Button:
+                size_hint_x: 1
+                id: button2
+                text: "CHECK"
+                font_size: 12
+                on_press: root.nobleCheckClicked()
+            Button:
+                size_hint_x: 3
+                id: button3
+                text: "back"
+                font_size: 12
+                on_press: root.backbtnClicked()
+            Button:
+                size_hint_x: 3
+                id: button4
+                text: "forward"
+                font_size: 12
+                on_press: root.forwardbtnClicked()
+            Button:
+                size_hint_x: 1
+                id: button5
+                text: "del"
+                font_size: 12
+                on_press: root.delbtnClicked()
+            Button:
+                size_hint_x: 1
+                id: button5
+                text: "save"
+                font_size: 12
+                on_press: root.savebtnClicked()
+            
+
