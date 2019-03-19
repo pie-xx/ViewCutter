@@ -4,9 +4,14 @@ import glob
 import os
 import time
 import json
-import pyocr
-import pyocr.builders
-import pyperclip
+try:
+    import pyocr
+    import pyocr.builders
+    import pyperclip
+    OCRon = True
+except:
+    OCRon = False
+    pass
 import pyautogui
 import datetime
 import subprocess
@@ -69,7 +74,7 @@ class Book(object):
             for p in job['ls']:
                 self.plist.append(p['pic'])
         except:
-            for p in glob.glob('*.jpg'):
+            for p in glob.glob('*.*'):
                 self.plist.append(p)
 
         self.cno = 0
@@ -169,14 +174,28 @@ class ImageBoard(object):
 
     def setImageSrc(self, src ):
         if( self.imageRect == None ):
-            self.imageRect = Rectangle(source=src, size=self.imageWidget.size, pos=(0,76))
-            self.imageWidget.canvas.add(self.imageRect)
+            try:
+                self.imageRect = Rectangle(source=src, size=self.imageWidget.size, pos=(0,76))
+                self.imageWidget.canvas.add(self.imageRect)
+            except:
+                pass
         else:
-            self.imageRect.source=src
+            try:
+                self.imageRect.source=src
+            except:
+                self.imageRect.source=""
+                pass
+
         if( self.Image != None ):
             self.Image.close()
+        try:
+            self.Image = PILImage.open(src)
+        except:
+            self.ImageSrc = ""
+            self.ratio = 1
+            self.imageOrgSize = self.imageWidget.size
+            return
         self.ImageSrc = src
-        self.Image = PILImage.open(src)
         self.imageOrgSize = self.Image.size
         
         if( self.imageWidget.size[0] < self.imageWidget.size[1] ):
@@ -186,6 +205,8 @@ class ImageBoard(object):
         
 
     def setSize( self, size ):
+        if( self.imageRect == None ):
+            return
         if( self.areaRect!=None):
             rect = self.areaRect.getRealRect()
         self.imageWidget.size_hint=(None, None)
@@ -221,6 +242,9 @@ class ImageBoard(object):
         pass
         
     def cutImage( self ):
+        if( OCRon == False ):
+            print("OCR not avalavle.")
+            return
         if( self.areaRect!=None):
             rect = self.areaRect.getRealRect()
             cutrect = (int(rect[0]), int(self.Image.size[1]-rect[1]-rect[3]), int(rect[0]+rect[2]), int(self.Image.size[1]-rect[1]))
@@ -319,9 +343,11 @@ class AreaViewWidget( Widget ):
 
     def backbtnClicked(self):
         self.setview(MyApp.book.before() )
+        self.setLayout( Window.size[0], Window.size[1] )
     
     def forwardbtnClicked(self):
         self.setview(MyApp.book.next())
+        self.setLayout( Window.size[0], Window.size[1] )
     
     def delbtnClicked(self):
         self.setview(MyApp.book.setno(0))
