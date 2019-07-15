@@ -7,6 +7,8 @@ AreaViewWidget:
     viewer_box:viewer_box
     annotation_box:annotation_box
     button_box:button_box
+    slider_box:slider_box
+    pageslider:pageslider
     
     BoxLayout:
         orientation: 'vertical'
@@ -18,12 +20,20 @@ AreaViewWidget:
             on_touch_down:root.onImageTouch(args)
             on_touch_move:root.onImageMove(args)
 
-        TextInput:
+        BoxLayout:
             size_hint_y: 1
-            id: annotation_box
+            id:slider_box
+            TextInput:
+                size_hint_x: 1
+                id: annotation_box
+            Slider:
+                size_hint_x: 7
+                id: pageslider
+                on_touch_up: root.slider_on_touch_up()
+                on_touch_down: root.slider_on_touch_down()
             
         BoxLayout:
-            size_hint_y: 2
+            size_hint_y: 1
             id:button_box
             Button:
                 size_hint_x: 1

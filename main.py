@@ -4,6 +4,8 @@ import glob
 import os
 import time
 import json
+import datetime
+
 try:
     import pyocr
     import pyocr.builders
@@ -19,7 +21,8 @@ import subprocess
 from kivy.app import App
 from kivy.core.window import Window
 from kivy.uix.widget import Widget
-from kivy.graphics import Rectangle, Line, BindTexture, Color
+from kivy.graphics import Rectangle, Line, BindTexture, Color, InstructionGroup
+from kivy.graphics.texture import Texture
 from kivy.properties import ObjectProperty,ListProperty
 from PIL import Image as PILImage 
 from kivy.clock import Clock
@@ -31,6 +34,7 @@ resource_add_path("C:/Users/piecr/Downloads/IPAexfont00301")
 LabelBase.register(DEFAULT_FONT, "ipaexg.ttf")
 
 IndexFile ='_index.json'
+ButtonMenuHeight=76
 
 class ColumnBox():
     def __init__(self, **kwargs):
@@ -105,12 +109,21 @@ class Book(object):
         if( len(self.plist)==0 ):
             MyApp.title = "0/0 -"
             return ""
-        MyApp.title = "{}/{} - {}".format(self.cno+1, len(self.plist), self.plist[self.cno])
-        return self.plist[self.cno]
+        try:
+            MyApp.title = "{}/{} - {}".format(self.cno+1, len(self.plist), self.plist[self.cno])
+            return self.plist[self.cno]
+        except:
+            return ""
 
-    def setno( self, no ):
+    def setpos( self, no ):
         self.cno = no
-        return self.plist[self.cno]
+        try:
+            return self.plist[self.cno]
+        except:
+            return ""
+
+    def getpos( self ):
+        return self.cno
     
     def length(self):
         return len(self.plist)
@@ -130,7 +143,7 @@ class AreaRect(object):
         self.Canvas.add( self.Inst1 )
         self.InstRect = None
         self.ratio = 1
-        self.bias = 76
+        self.bias = ButtonMenuHeight
         pass
 
     def setRatioBias(self, ratio, bias ):
@@ -165,39 +178,51 @@ class AreaRect(object):
 class ImageBoard(object):
     def __init__(self, widget):
         self.imageWidget = widget
-        self.Image = None
+        #self.PImage = PILImage.open("")
+        self.Image=None
         self.ImageSrc = None
         self.imageRect = None
         self.areaRect = None
         self.ratio = 1
         self.Areas = []
+        
+        self.Texture = Texture.create(size=widget.size)
+        
+        self.BaseImgGrp = InstructionGroup()
+        self.imageRect = Rectangle( texture=self.Texture, size=self.imageWidget.size, pos=(0,ButtonMenuHeight))
+        self.BaseImgGrp.add(self.imageRect)
+
+        self.AreaRectGrp = InstructionGroup()
+
+        self.imageWidget.canvas.add(self.BaseImgGrp)
+        self.imageWidget.canvas.add(self.AreaRectGrp)
+
+    def setImage(self):
+        pass
 
     def setImageSrc(self, src ):
-        if( self.imageRect == None ):
-            try:
-                self.imageRect = Rectangle(source=src, size=self.imageWidget.size, pos=(0,76))
-                self.imageWidget.canvas.add(self.imageRect)
-            except:
-                pass
-        else:
-            try:
-                self.imageRect.source=src
-            except:
-                self.imageRect.source=""
-                pass
-
-        if( self.Image != None ):
-            self.Image.close()
+        print("setImageSrc(self, src )", src)
         try:
             self.Image = PILImage.open(src)
+            buff = self.Image.tobytes()
+            self.Texture = Texture.create(size=self.Image.size)
+            self.Texture.blit_buffer(buff)
+            self.Texture.flip_vertical()
+            self.Image.close()
+            print("setImageSrc Texture",self.Texture)
+            self.BaseImgGrp.clear()
+            self.imageRect = Rectangle( texture=self.Texture, size=self.imageWidget.size, pos=(0,ButtonMenuHeight))
+            self.BaseImgGrp.add(self.imageRect)
+            
+            self.ImageSrc = src
+            self.imageOrgSize = self.Image.size
+        
         except:
             self.ImageSrc = ""
             self.ratio = 1
             self.imageOrgSize = self.imageWidget.size
             return
-        self.ImageSrc = src
-        self.imageOrgSize = self.Image.size
-        
+
         if( self.imageWidget.size[0] < self.imageWidget.size[1] ):
             self.ratio = self.imageWidget.size[0]/self.imageOrgSize[0]
         else:
@@ -211,7 +236,8 @@ class ImageBoard(object):
             rect = self.areaRect.getRealRect()
         self.imageWidget.size_hint=(None, None)
         self.imageWidget.size = size
-        
+
+        print("ImageBoard.setSize", self.imageWidget.size[0], self.imageWidget.size[1])       
         if( self.imageWidget.size[0] < self.imageWidget.size[1] ):
             self.ratio = self.imageWidget.size[0]/self.imageOrgSize[0]
             self.imageRect.size=(self.imageWidget.size[0], (self.ratio)*self.imageOrgSize[1])
@@ -220,7 +246,7 @@ class ImageBoard(object):
             self.imageRect.size=((self.ratio)*self.imageOrgSize[0], self.imageWidget.size[1] )
             
         if( self.areaRect!=None):
-            self.areaRect.setRatioBias(self.ratio, 76)
+            self.areaRect.setRatioBias(self.ratio, ButtonMenuHeight)
             self.areaRect.setRealRect(rect)
         pass
 
@@ -228,10 +254,12 @@ class ImageBoard(object):
         if( self.areaRect == None ):
             self.areaRect = AreaRect(self.imageWidget.canvas)
         self.areaRect.setRect(rect)
-        self.areaRect.setRatioBias(self.ratio, 76)
+        self.areaRect.setRatioBias(self.ratio, ButtonMenuHeight)
         pass
 
     def clearRect( self ):
+        self.AreaRectGrp.clear()
+        """
         rect = self.imageRect.size
         self.imageWidget.canvas.clear()
         self.imageRect = None
@@ -239,18 +267,19 @@ class ImageBoard(object):
         
         self.setImageSrc(self.ImageSrc)
         self.imageRect.size = rect
+        """
         pass
         
     def cutImage( self ):
-        if( OCRon == False ):
-            print("OCR not avalavle.")
-            return
         if( self.areaRect!=None):
             rect = self.areaRect.getRealRect()
             cutrect = (int(rect[0]), int(self.Image.size[1]-rect[1]-rect[3]), int(rect[0]+rect[2]), int(self.Image.size[1]-rect[1]))
             print("scaning ",cutrect)
             cropimage = self.Image.crop(cutrect)
-        #    cropimage.save( "rect.jpg" )
+            cropimage.save( datetime.datetime.now().strftime('%Y-%m-%dT%H%M%S')+self.ImageSrc )
+            if( OCRon == False ):
+                print("OCR not avalavle.")
+                return
             txt = pyocr.get_available_tools()[0].image_to_string(
                 cropimage,
                 lang="jpn",
@@ -263,40 +292,38 @@ class ImageBoard(object):
 
 class AreaViewWidget( Widget ):
     viewer_box = ObjectProperty(None)
-    annotation_box = ObjectProperty(None)
+    slider_box = ObjectProperty(None)
     button_box = ObjectProperty(None)
+    pageslider = ObjectProperty(None)
 
     def __init__(self, **kwargs):
         super(AreaViewWidget, self).__init__(**kwargs)
+        MyApp.book.setdir('.')
         self.ivm = ImageBoard( self.viewer_box )
         self.image = None
         self.touch_down_pos = (0,0)
-        MyApp.book.setdir('.')
         self.setview(MyApp.book.current())
         self.rect = None
         Window.bind(on_dropfile=self._on_file_drop)
         Window.bind(on_resize=self._on_resize)
+        self.initSlider()
+
+    def initSlider(self):
+        print(self.slider_box)
+        self.pageslider.max=MyApp.book.length()-1
+        self.pageslider.min=0
+        self.pageslider.value = int(MyApp.book.getpos())
+        pass
 
     def setLayout(self, width, height):
-        self.ivm.setSize((width,height-76))
-        self.annotation_box.size_hint=(None, None)
-        self.annotation_box.size = (width,26)
+        print("setLayout", width, height)
+        self.ivm.setSize((width,height-ButtonMenuHeight))
+        self.slider_box.size_hint=(None, None)
+        self.slider_box.size = (width,26)
         self.button_box.size_hint=(None, None)
         self.button_box.size = (width,50)
         pass
     
-    def onImageTouch(self,event):
-        self.touch_down_pos = event[1].pos
-        self.ivm.clearRect()
-
-    def onImageMove(self,event):
-        touchpos = event[1].pos
-        self.ivm.setRect((self.touch_down_pos[0] ,self.touch_down_pos[1],
-                touchpos[0] - self.touch_down_pos[0], touchpos[1] - self.touch_down_pos[1]))
-
-    def onImageUp(self,event):
-        pass
-
     def sendCap(self,capfile):
         try:
             subprocess.run("adb push semaphore.txt /storage/emulated/0/kivy/OsaturnSideView/", shell=True, check=True)
@@ -342,15 +369,17 @@ class AreaViewWidget( Widget ):
         Clock.schedule_interval( intervalcap, 2 )  
 
     def backbtnClicked(self):
+        print("* backbtnClicked")
         self.setview(MyApp.book.before() )
         self.setLayout( Window.size[0], Window.size[1] )
     
     def forwardbtnClicked(self):
+        print("* forwardbtnClicked")
         self.setview(MyApp.book.next())
         self.setLayout( Window.size[0], Window.size[1] )
     
     def delbtnClicked(self):
-        self.setview(MyApp.book.setno(0))
+        self.setview(MyApp.book.setpos(0))
         for f in MyApp.book.getlist():
             self.ivm.cutImage()
             MyApp.book.next()
@@ -359,7 +388,9 @@ class AreaViewWidget( Widget ):
         self.ivm.cutImage()
         
     def setview(self, fpath):
+        print("setview")
         self.ivm.setImageSrc(fpath)
+        self.pageslider.value = int(MyApp.book.getpos())
     
     def _on_file_drop(self, window, file_path):
         fpath=file_path.decode(encoding='utf-8')
@@ -373,14 +404,40 @@ class AreaViewWidget( Widget ):
         else:
             MyApp.book.setdir(fpath)
 
+        self.initSlider()
+        print("addFile", MyApp.book.length(),MyApp.book.getpos())
         self.ivm.setImageSrc(MyApp.book.current())
         self.setLayout(Window.size[0],Window.size[1])
-        
 
     def _on_resize(self, window, a, b):
+        print("on_resize", a, b)
         self.setLayout( a, b )
 
-    
+    def onImageTouch(self,event):
+        self.touch_down_pos = event[1].pos
+        self.ivm.clearRect()
+
+    def onImageMove(self,event):
+        if( self.touch_down_pos[1] < ButtonMenuHeight ):
+            return
+        touchpos = event[1].pos
+        self.ivm.setRect((self.touch_down_pos[0] ,self.touch_down_pos[1],
+                touchpos[0] - self.touch_down_pos[0], touchpos[1] - self.touch_down_pos[1]))
+
+    def onImageUp(self,event):
+        pass
+
+    def slider_on_touch_up(self):
+        print("->* slider_on_touch_up", self.pageslider.value)
+        MyApp.book.setpos(int(self.pageslider.value))
+        self.setview(MyApp.book.current())
+        self.pageslider.value = int(MyApp.book.getpos())
+        print("<-* slider_on_touch_up", self.pageslider.value)
+        pass
+
+    def slider_on_touch_down(self):
+        print("slider_on_touch_down", self.pageslider.value)
+        pass
 
 
 class AreaViewApp(App):
