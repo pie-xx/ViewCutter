@@ -30,8 +30,12 @@ from kivy.clock import Clock
 from kivy.core.text import LabelBase, DEFAULT_FONT
 from kivy.resources import resource_add_path
 
-resource_add_path("C:/Users/piecr/Downloads/IPAexfont00301")
-LabelBase.register(DEFAULT_FONT, "ipaexg.ttf")
+try:
+    resource_add_path("IPAexfont00301")
+    LabelBase.register(DEFAULT_FONT, "ipaexg.ttf")
+except Exception as e:
+    print(e)
+    pass
 
 IndexFile ='_index.json'
 ButtonMenuHeight=76
@@ -178,56 +182,21 @@ class AreaRect(object):
 class ImageBoard(object):
     def __init__(self, widget):
         self.imageWidget = widget
-        #self.PImage = PILImage.open("")
-        self.Image=None
+        self.image = None
         self.ImageSrc = None
         self.imageRect = None
         self.areaRect = None
         self.ratio = 1
-        self.Areas = []
-        
-        self.Texture = Texture.create(size=widget.size)
-        
-        self.BaseImgGrp = InstructionGroup()
-        self.imageRect = Rectangle( texture=self.Texture, size=self.imageWidget.size, pos=(0,ButtonMenuHeight))
-        self.BaseImgGrp.add(self.imageRect)
+        self.areas = []
+        self.PanelH = 76
 
-        self.AreaRectGrp = InstructionGroup()
-
-        self.imageWidget.canvas.add(self.BaseImgGrp)
-        self.imageWidget.canvas.add(self.AreaRectGrp)
-
-    def setImage(self):
-        pass
-
-    def setImageSrc(self, src ):
-        print("setImageSrc(self, src )", src)
-        try:
-            self.Image = PILImage.open(src)
-            buff = self.Image.tobytes()
-            self.Texture = Texture.create(size=self.Image.size)
-            self.Texture.blit_buffer(buff)
-            self.Texture.flip_vertical()
-            self.Image.close()
-            print("setImageSrc Texture",self.Texture)
-            self.BaseImgGrp.clear()
-            self.imageRect = Rectangle( texture=self.Texture, size=self.imageWidget.size, pos=(0,ButtonMenuHeight))
-            self.BaseImgGrp.add(self.imageRect)
-            
-            self.ImageSrc = src
-            self.imageOrgSize = self.Image.size
-        
-        except:
-            self.ImageSrc = ""
-            self.ratio = 1
-            self.imageOrgSize = self.imageWidget.size
-            return
-
+    def resetRatio(self):
         if( self.imageWidget.size[0] < self.imageWidget.size[1] ):
             self.ratio = self.imageWidget.size[0]/self.imageOrgSize[0]
+            self.imageRect.size=(self.imageWidget.size[0], (self.ratio)*self.imageOrgSize[1])
         else:
             self.ratio = self.imageWidget.size[1]/self.imageOrgSize[1]
-        
+            self.imageRect.size=((self.ratio)*self.imageOrgSize[0], self.imageWidget.size[1] )
 
     def setSize( self, size ):
         if( self.imageRect == None ):
@@ -237,58 +206,79 @@ class ImageBoard(object):
         self.imageWidget.size_hint=(None, None)
         self.imageWidget.size = size
 
-        print("ImageBoard.setSize", self.imageWidget.size[0], self.imageWidget.size[1])       
-        if( self.imageWidget.size[0] < self.imageWidget.size[1] ):
-            self.ratio = self.imageWidget.size[0]/self.imageOrgSize[0]
-            self.imageRect.size=(self.imageWidget.size[0], (self.ratio)*self.imageOrgSize[1])
-        else:
-            self.ratio = self.imageWidget.size[1]/self.imageOrgSize[1]
-            self.imageRect.size=((self.ratio)*self.imageOrgSize[0], self.imageWidget.size[1] )
-            
+        #self.resetRatio()
+        self.setRatio()
+        
         if( self.areaRect!=None):
-            self.areaRect.setRatioBias(self.ratio, ButtonMenuHeight)
+            self.areaRect.setRatioBias(self.ratio, 76)
             self.areaRect.setRealRect(rect)
-        pass
+
+        for a in self.areas:
+            rect = a.getRealRect()
+            a.setRealRect(rect)
+
 
     def setRect( self, rect ):
         if( self.areaRect == None ):
             self.areaRect = AreaRect(self.imageWidget.canvas)
         self.areaRect.setRect(rect)
-        self.areaRect.setRatioBias(self.ratio, ButtonMenuHeight)
+        self.areaRect.setRatioBias(self.ratio, 76)
         pass
 
+    def addRealRect( self, rect ):
+        area = AreaRect(self.imageWidget.canvas)
+        arect = (rect[0]*self.ratio,(self.imageOrgSize[1]-rect[1]-256)*self.ratio+76,rect[2]*self.ratio,rect[3]*self.ratio)
+        area.setRect(arect)
+        self.areas.append(area)
+
     def clearRect( self ):
-        self.AreaRectGrp.clear()
-        """
-        rect = self.imageRect.size
         self.imageWidget.canvas.clear()
         self.imageRect = None
         self.areaRect = None
         
-        self.setImageSrc(self.ImageSrc)
-        self.imageRect.size = rect
-        """
+#        self.setImageSrc(self.ImageSrc)
         pass
+    
+    def setImage(self, im ):
+        self.image = im
+        if( im != None ):
+            self.imageOrgSize = self.image.size
+    
+    def setRatio(self):
+        if( self.image == None ):
+            return
+        imageX = self.image.size[0]
+        imageY = self.image.size[1]
+        #viewX = self.imageWidget.size[0]
+        #viewY = self.imageWidget.size[1]
+        viewX = Window.size[0]
+        viewY = Window.size[1] - self.PanelH
         
-    def cutImage( self ):
-        if( self.areaRect!=None):
-            rect = self.areaRect.getRealRect()
-            cutrect = (int(rect[0]), int(self.Image.size[1]-rect[1]-rect[3]), int(rect[0]+rect[2]), int(self.Image.size[1]-rect[1]))
-            print("scaning ",cutrect)
-            cropimage = self.Image.crop(cutrect)
-            cropimage.save( datetime.datetime.now().strftime('%Y-%m-%dT%H%M%S')+self.ImageSrc )
-            if( OCRon == False ):
-                print("OCR not avalavle.")
-                return
-            txt = pyocr.get_available_tools()[0].image_to_string(
-                cropimage,
-                lang="jpn",
-                builder=pyocr.builders.TextBuilder(tesseract_layout=6)
-            )
-            print( txt )
-            pyperclip.copy(txt)
-            print( "---" )
+        orgasp = imageX / imageY
+        wgtasp = viewX / viewY
 
+        if( orgasp < wgtasp ):
+            self.ratio = viewY / imageY
+        else:
+            self.ratio = viewX / imageX
+
+        print("self.ratio", self.ratio)
+
+    def show(self):
+        if( self.image == None ):
+            return
+        print( "show", self.image )
+        self.setRatio()
+
+        texture = Texture.create(size=self.image.size)
+        buff = self.image.tobytes()
+        texture.blit_buffer(buff)
+        texture.flip_vertical()
+
+        self.imageWidget.canvas.clear()
+        with self.imageWidget.canvas:
+            Rectangle(pos=(0, 0), size=self.imageWidget.size)
+            Rectangle(texture=texture ,pos=(0, self.PanelH), size=(self.image.size[0]*self.ratio, self.image.size[1]*self.ratio))
 
 class AreaViewWidget( Widget ):
     viewer_box = ObjectProperty(None)
@@ -307,12 +297,13 @@ class AreaViewWidget( Widget ):
         Window.bind(on_dropfile=self._on_file_drop)
         Window.bind(on_resize=self._on_resize)
         self.initSlider()
+        self.ontouchdown = False
 
     def initSlider(self):
-        print(self.slider_box)
         self.pageslider.max=MyApp.book.length()-1
         self.pageslider.min=0
         self.pageslider.value = int(MyApp.book.getpos())
+        print("initSlider",self.pageslider.max,self.pageslider.min, self.pageslider.value)
         pass
 
     def setLayout(self, width, height):
@@ -388,10 +379,10 @@ class AreaViewWidget( Widget ):
         self.ivm.cutImage()
         
     def setview(self, fpath):
-        print("setview")
-        self.ivm.setImageSrc(fpath)
-        self.pageslider.value = int(MyApp.book.getpos())
-    
+        print("setview",fpath)
+        self.setImageSrc(fpath)
+        self.fpath = fpath
+        
     def _on_file_drop(self, window, file_path):
         fpath=file_path.decode(encoding='utf-8')
         self.addFile(fpath)
@@ -404,10 +395,66 @@ class AreaViewWidget( Widget ):
         else:
             MyApp.book.setdir(fpath)
 
+        self.setImageSrc( MyApp.book.current() )
+        
         self.initSlider()
-        print("addFile", MyApp.book.length(),MyApp.book.getpos())
-        self.ivm.setImageSrc(MyApp.book.current())
-        self.setLayout(Window.size[0],Window.size[1])
+#        print("addFile", MyApp.book.length(),MyApp.book.getpos())
+#        self.ivm.setImageSrc(MyApp.book.current())
+#        self.setLayout(Window.size[0],Window.size[1])
+
+    def setImageSrc( self, src ):
+        print( "setImageSrc", src )
+        if( self.readImage( src ) ):
+            self.vmode='color'
+            self.ivm.setImage(self.image)
+            self.ivm.show()
+            self.setLayout(Window.size[0],Window.size[1])
+
+
+    def readImage(self, file_path):
+        print("readImage", file_path)
+        try:
+            self.fname = file_path
+            if( self.image!=None):
+                self.image.close()
+                self.image = None
+                
+            # ps = self.fname.split('.')
+
+            self.vmode = "pic"
+            self.makeImage( self.vmode )
+        except Exception as e:
+            self.image = None
+            self.ivm.setImage(None)
+            print("readImage error", file_path, e)
+            return False
+        return True
+
+    def makeImage(self, vmode):
+        print("makeImage ",vmode)
+        if( self.vmode=='color' ):
+            topo = himawari.normalize( self.fv )*self.ralv
+            self.image = himawari.colorize(topo, himawari.mkRadPointTbl())
+        elif( self.vmode=='bw0' ):
+            topo = himawari.normalize( self.fv )
+            topo = ((1-topo)*255).astype(np.uint8)
+            self.image = PILImage.fromarray(topo).convert("RGB")
+        elif( self.vmode=='bw1' ):
+            topo = himawari.normalize( self.fv )
+            topo = ((topo)*255).astype(np.uint8)
+            self.image = PILImage.fromarray(topo).convert("RGB")
+        elif( self.vmode=='seikai' ):
+            tmpim = PILImage.open(self.fname)
+            topo = np.asarray(tmpim)
+            self.image = himawari.colorize(topo, himawari.mkRadPointTbl2())
+            tmpim.close()
+        else:
+            print("self.fname", self.fname)
+            tmpim = PILImage.open(self.fname)
+            self.image = tmpim.convert("RGB")
+            print(self.image)
+            tmpim.close()
+        pass
 
     def _on_resize(self, window, a, b):
         print("on_resize", a, b)
@@ -429,14 +476,17 @@ class AreaViewWidget( Widget ):
 
     def slider_on_touch_up(self):
         print("->* slider_on_touch_up", self.pageslider.value)
-        MyApp.book.setpos(int(self.pageslider.value))
-        self.setview(MyApp.book.current())
-        self.pageslider.value = int(MyApp.book.getpos())
-        print("<-* slider_on_touch_up", self.pageslider.value)
+        if( self.ontouchdown == True):
+            MyApp.book.setpos(int(self.pageslider.value))
+            self.setview(MyApp.book.current())
+            self.pageslider.value = int(MyApp.book.getpos())
+            print("<-* slider_on_touch_up", self.pageslider.value)
+        self.ontouchdown = False
         pass
 
     def slider_on_touch_down(self):
         print("slider_on_touch_down", self.pageslider.value)
+        self.ontouchdown = True
         pass
 
 
